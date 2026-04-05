@@ -17,7 +17,7 @@ interface Props {
   onToggleZipLayer: () => void;
 }
 
-type FilterState = 'all' | 'MO' | 'IL';
+type FilterState = 'official' | 'MO' | 'IL';
 
 export function Sidebar({
   zipCodes,
@@ -33,22 +33,22 @@ export function Sidebar({
   zipLayerVisible,
   onToggleZipLayer,
 }: Props) {
-  const [filter, setFilter] = useState<FilterState>('all');
+  const [filter, setFilter] = useState<FilterState>('official');
   const [search, setSearch] = useState('');
   const [newZip, setNewZip] = useState('');
   const [newState, setNewState] = useState<'MO' | 'IL'>('MO');
   const [newLabel, setNewLabel] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'official' | 'custom'>('all');
 
   const filtered = useMemo(() => {
     return zipCodes.filter(z => {
-      if (filter !== 'all' && z.state !== filter) return false;
-      if (sourceFilter !== 'all' && z.source !== sourceFilter) return false;
+      if (filter === 'official' && z.source !== 'official') return false;
+      if (filter === 'MO' && z.state !== 'MO') return false;
+      if (filter === 'IL' && z.state !== 'IL') return false;
       if (search && !z.zip.includes(search) && !z.label?.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [zipCodes, filter, search, sourceFilter]);
+  }, [zipCodes, filter, search]);
 
   const handleAdd = () => {
     const zip = newZip.trim();
@@ -59,9 +59,6 @@ export function Sidebar({
     setNewLabel('');
     setShowAdd(false);
   };
-
-  const officialCount = zipCodes.filter(z => z.source === 'official').length;
-  const customCount   = zipCodes.filter(z => z.source === 'custom').length;
 
   const loadedCount = zipCodes.filter(z => cache[z.zip]?.geojson).length;
   const loadingCount = Object.keys(loading).length;
@@ -99,37 +96,15 @@ export function Sidebar({
           onChange={e => setSearch(e.target.value)}
         />
         <div className="filter-tabs">
-          {(['all', 'MO', 'IL'] as FilterState[]).map(f => (
+          {(['official', 'MO', 'IL'] as FilterState[]).map(f => (
             <button
               key={f}
-              className={`filter-tab ${filter === f ? 'active' : ''} ${f === 'MO' ? 'mo' : f === 'IL' ? 'il' : ''}`}
+              className={`filter-tab ${filter === f ? 'active' : ''} ${f === 'MO' ? 'mo' : f === 'IL' ? 'il' : f === 'official' ? 'official' : ''}`}
               onClick={() => setFilter(f)}
             >
-              {f === 'all' ? 'All' : f}
+              {f === 'official' ? 'Official' : f}
             </button>
           ))}
-        </div>
-        <div className="filter-tabs source-tabs">
-          <button
-            className={`filter-tab ${sourceFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setSourceFilter('all')}
-          >
-            All
-          </button>
-          <button
-            className={`filter-tab official ${sourceFilter === 'official' ? 'active' : ''}`}
-            onClick={() => setSourceFilter('official')}
-            title="Official commutable zip codes from PDF"
-          >
-            Official ({officialCount})
-          </button>
-          <button
-            className={`filter-tab custom ${sourceFilter === 'custom' ? 'active' : ''}`}
-            onClick={() => setSourceFilter('custom')}
-            title="Manually added zip codes"
-          >
-            Custom {customCount > 0 ? `(${customCount})` : ''}
-          </button>
         </div>
       </div>
 
