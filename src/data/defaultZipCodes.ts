@@ -1,7 +1,6 @@
 import type { ZipCodeEntry } from '../types';
 
-// Authoritative commutable zip codes for STL HQ (effective 6/1/26)
-// Source: STL_Commutable Zip_Postal Codes.pdf, last revised 2/18/2026
+// St. Louis metro commute zone zip codes
 export const DEFAULT_ZIP_CODES: ZipCodeEntry[] = [
   // ── Missouri ──────────────────────────────────────────────────────────────
   { zip: '63005', state: 'MO', label: 'Chesterfield',       source: 'official', enabled: true },

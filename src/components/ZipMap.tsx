@@ -8,26 +8,46 @@ import {
 } from 'react-leaflet';
 import L from 'leaflet';
 import type { Layer, StyleFunction } from 'leaflet';
-import type { ZipCodeEntry, BoundaryCache, CountyDef, CountyCache } from '../types';
+import type { ZipCodeEntry, BoundaryCache, CountyDef, CountyCache, LocationConfig } from '../types';
 import { CountyLayer } from './CountyLayer';
 import 'leaflet/dist/leaflet.css';
 
-const STL_CENTER: [number, number] = [38.627, -90.198];
 const DEFAULT_ZOOM = 10;
 const MO_COLOR = '#3b82f6';
 const IL_COLOR = '#f59e0b';
+const AZ_COLOR = '#a855f7'; // purple for Arizona
 const DISABLED_COLOR = '#9ca3af';
 
-function FitBoundsOnce({
+function stateColor(state: string): string {
+  if (state === 'MO') return MO_COLOR;
+  if (state === 'IL') return IL_COLOR;
+  return AZ_COLOR;
+}
+
+/** Re-centers the map whenever the location changes, then fits bounds on first data load. */
+function LocationController({
+  location,
   zipCodes,
   cache,
 }: {
+  location: LocationConfig;
   zipCodes: ZipCodeEntry[];
   cache: BoundaryCache;
 }) {
   const map = useMap();
+  const currentLocationId = useRef(location.id);
   const fitted = useRef(false);
 
+  // Re-center immediately when location switches
+  useEffect(() => {
+    if (currentLocationId.current !== location.id) {
+      currentLocationId.current = location.id;
+      fitted.current = false;
+      map.setView(location.center, location.zoom);
+    }
+  }, [location, map]);
+
+  // Fit bounds once on first data load for this location
   useEffect(() => {
     if (fitted.current) return;
 
@@ -65,11 +85,11 @@ interface Props {
   selectedZip: string | null;
   onSelectZip: (zip: string | null) => void;
   zipLayerVisible: boolean;
-  // County layer props
   counties: CountyDef[];
   countyCache: CountyCache;
   municipVis: Record<string, boolean>;
   outlineVis: Record<string, boolean>;
+  location: LocationConfig;
 }
 
 export function ZipMap({
@@ -82,10 +102,11 @@ export function ZipMap({
   countyCache,
   municipVis,
   outlineVis,
+  location,
 }: Props) {
   return (
     <MapContainer
-      center={STL_CENTER}
+      center={location.center}
       zoom={DEFAULT_ZOOM}
       style={{ height: '100%', width: '100%' }}
     >
@@ -95,7 +116,7 @@ export function ZipMap({
         maxZoom={19}
       />
 
-      <FitBoundsOnce zipCodes={zipCodes} cache={cache} />
+      <LocationController location={location} zipCodes={zipCodes} cache={cache} />
 
       {/* ── County fills and municipality layers (below zip fills) ── */}
       <CountyLayer
@@ -127,7 +148,7 @@ export function ZipMap({
         .filter(z => z.enabled && cache[z.zip]?.geojson)
         .map(entry => {
           const isSelected = selectedZip === entry.zip;
-          const color = entry.state === 'MO' ? MO_COLOR : IL_COLOR;
+          const color = stateColor(entry.state);
 
           const style: StyleFunction = () => ({
             color: isSelected ? '#ef4444' : color,
@@ -166,7 +187,7 @@ export function ZipMap({
                 <strong>{entry.zip}</strong>
                 {entry.label ? ` — ${entry.label}` : ''}
                 <br />
-                <span style={{ color: entry.state === 'MO' ? MO_COLOR : IL_COLOR }}>
+                <span style={{ color }}>
                   {entry.state}
                 </span>
               </Tooltip>

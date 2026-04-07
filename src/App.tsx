@@ -1,49 +1,72 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { ZipMap } from './components/ZipMap';
 import { Sidebar } from './components/Sidebar';
 import { CountyPanel } from './components/CountyPanel';
 import { useZipBoundaries } from './hooks/useZipBoundaries';
 import { useCountyData } from './hooks/useCountyData';
 import { DEFAULT_ZIP_CODES } from './data/defaultZipCodes';
+import { DEFAULT_ZIP_CODES_TEMPE } from './data/defaultZipCodesTempe';
 import { INCLUDED_COUNTIES } from './data/counties';
-import type { ZipCodeEntry } from './types';
+import { INCLUDED_COUNTIES_TEMPE } from './data/countiesTempe';
+import { LOCATIONS } from './data/locations';
+import type { ZipCodeEntry, LocationId, StateCode } from './types';
 import './App.css';
 
-const STORAGE_KEY = 'zipCodeList';
-
-function loadZipCodes(): ZipCodeEntry[] {
+function loadZipCodes(storageKey: string, defaults: ZipCodeEntry[]): ZipCodeEntry[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (raw) return JSON.parse(raw);
   } catch {
     // ignore
   }
-  return DEFAULT_ZIP_CODES;
+  return defaults;
 }
 
-function saveZipCodes(codes: ZipCodeEntry[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(codes));
+function saveZipCodes(storageKey: string, codes: ZipCodeEntry[]) {
+  localStorage.setItem(storageKey, JSON.stringify(codes));
 }
 
 export default function App() {
-  const [zipCodes, setZipCodes] = useState<ZipCodeEntry[]>(loadZipCodes);
+  const [locationId, setLocationId] = useState<LocationId>('stl');
+  const location = LOCATIONS.find(l => l.id === locationId)!;
+
+  // Per-location zip code lists, loaded lazily from localStorage
+  const [zipMap, setZipMap] = useState<Record<LocationId, ZipCodeEntry[]>>(() => ({
+    stl: loadZipCodes('zipCodes_stl', DEFAULT_ZIP_CODES),
+    tempe: loadZipCodes('zipCodes_tempe', DEFAULT_ZIP_CODES_TEMPE),
+  }));
+
+  const zipCodes = zipMap[locationId];
+
+  const updateZipCodes = useCallback((next: ZipCodeEntry[], locId: LocationId = locationId) => {
+    setZipMap(prev => ({ ...prev, [locId]: next }));
+    saveZipCodes(locId === 'stl' ? 'zipCodes_stl' : 'zipCodes_tempe', next);
+  }, [locationId]);
+
   const [selectedZip, setSelectedZip] = useState<string | null>(null);
 
-  // ── Zip boundary state ────────────────────────────────────────────────────
+  // ── Location switching ────────────────────────────────────────────────────
+  const handleLocationChange = (id: LocationId) => {
+    setLocationId(id);
+    setSelectedZip(null);
+    setMunicipVis({});
+    setOutlineVis({});
+  };
+
+  // ── Zip boundaries ────────────────────────────────────────────────────────
   const allZips = useMemo(() => zipCodes.map(z => z.zip), [zipCodes]);
   const { cache, loading, errors, clearCache } = useZipBoundaries(allZips);
 
   // ── County / municipality state ───────────────────────────────────────────
-  // municipVis: which counties have their municipality fill layer on
-  // outlineVis: which counties have their county outline on
   const [zipLayerVisible, setZipLayerVisible] = useState(true);
   const [municipVis, setMunicipVis] = useState<Record<string, boolean>>({});
   const [outlineVis, setOutlineVis] = useState<Record<string, boolean>>({});
 
-  // Only pass counties to the hook when at least one toggle is on for them
+  const includedCounties = locationId === 'stl' ? INCLUDED_COUNTIES : INCLUDED_COUNTIES_TEMPE;
+
   const activeCounties = useMemo(
-    () => INCLUDED_COUNTIES.filter(c => municipVis[c.id] || outlineVis[c.id]),
-    [municipVis, outlineVis]
+    () => includedCounties.filter(c => municipVis[c.id] || outlineVis[c.id]),
+    [includedCounties, municipVis, outlineVis]
   );
 
   const {
@@ -63,16 +86,11 @@ export default function App() {
   };
 
   // ── Zip code handlers ─────────────────────────────────────────────────────
-  const updateZipCodes = (next: ZipCodeEntry[]) => {
-    setZipCodes(next);
-    saveZipCodes(next);
-  };
-
   const handleToggle = (zip: string) => {
     updateZipCodes(zipCodes.map(z => (z.zip === zip ? { ...z, enabled: !z.enabled } : z)));
   };
 
-  const handleAdd = (zip: string, state: 'MO' | 'IL', label?: string) => {
+  const handleAdd = (zip: string, state: StateCode, label?: string) => {
     updateZipCodes([...zipCodes, { zip, state, enabled: true, label, source: 'custom' }]);
   };
 
@@ -104,9 +122,11 @@ export default function App() {
           }}
           zipLayerVisible={zipLayerVisible}
           onToggleZipLayer={() => setZipLayerVisible(v => !v)}
+          location={location}
+          onLocationChange={handleLocationChange}
         />
         <CountyPanel
-          counties={INCLUDED_COUNTIES}
+          counties={includedCounties}
           cache={countyCache}
           loading={countyLoading}
           errors={countyErrors}
@@ -126,16 +146,17 @@ export default function App() {
           onSelectZip={setSelectedZip}
           zipLayerVisible={zipLayerVisible}
           countyCache={countyCache}
-          counties={INCLUDED_COUNTIES}
+          counties={includedCounties}
           municipVis={municipVis}
           outlineVis={outlineVis}
+          location={location}
         />
 
         {selectedEntry && (
           <div className="info-panel">
             <strong>{selectedEntry.zip}</strong>
             {selectedEntry.label && <> — {selectedEntry.label}</>}
-            <span className={`state-badge ${selectedEntry.state === 'MO' ? 'mo' : 'il'}`}>
+            <span className={`state-badge ${selectedEntry.state.toLowerCase()}`}>
               {selectedEntry.state}
             </span>
             <button onClick={() => setSelectedZip(null)}>×</button>

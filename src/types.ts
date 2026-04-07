@@ -1,7 +1,11 @@
+export type StateCode = 'MO' | 'IL' | 'AZ';
+
+export type LocationId = 'stl' | 'tempe';
+
 export interface ZipCodeEntry {
   zip: string;
   label?: string;
-  state: 'MO' | 'IL';
+  state: StateCode;
   enabled: boolean;
   source: 'official' | 'custom';
 }
@@ -19,20 +23,19 @@ export type BoundaryCache = Record<string, ZipCodeBoundary>;
 export interface CountyDef {
   id: string;           // unique key e.g. '29-189'
   name: string;
-  stateFips: string;    // '29' MO | '17' IL
+  stateFips: string;
   countyFips: string;   // 3-digit FIPS e.g. '189'
-  stateName: 'MO' | 'IL';
-  /** true = part of the core 8-county STL metro; false = reserved for adjacent county expansion */
+  stateName: StateCode;
   included: boolean;
 }
 
 export type MunicipalityType = 'incorporated' | 'cdp';
 
 export interface MunicipalBoundary {
-  id: string;             // STATE+PLACE e.g. '29-62030'
+  id: string;
   name: string;
   type: MunicipalityType;
-  lsadc: string;          // TIGER place type code
+  lsadc: string;
   geojson: GeoJSON.Feature;
 }
 
@@ -44,3 +47,14 @@ export interface CountyData {
 }
 
 export type CountyCache = Record<string, CountyData>;
+
+// ── Location config ───────────────────────────────────────────────────────────
+
+export interface LocationConfig {
+  id: LocationId;
+  label: string;
+  center: [number, number]; // [lat, lng]
+  zoom: number;
+  states: StateCode[];
+  zipStorageKey: string;
+}

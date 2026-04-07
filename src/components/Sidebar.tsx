@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
-import type { ZipCodeEntry } from '../types';
-import type { BoundaryCache } from '../types';
+import { useState, useMemo, useEffect } from 'react';
+import type { ZipCodeEntry, BoundaryCache, LocationConfig, LocationId, StateCode } from '../types';
+import { LOCATIONS } from '../data/locations';
 
 interface Props {
   zipCodes: ZipCodeEntry[];
@@ -10,14 +10,16 @@ interface Props {
   selectedZip: string | null;
   onSelectZip: (zip: string | null) => void;
   onToggleZip: (zip: string) => void;
-  onAddZip: (zip: string, state: 'MO' | 'IL', label?: string) => void;
+  onAddZip: (zip: string, state: StateCode, label?: string) => void;
   onRemoveZip: (zip: string) => void;
   onClearCache: () => void;
   zipLayerVisible: boolean;
   onToggleZipLayer: () => void;
+  location: LocationConfig;
+  onLocationChange: (id: LocationId) => void;
 }
 
-type FilterState = 'official' | 'MO' | 'IL';
+type FilterState = 'official' | StateCode;
 
 export function Sidebar({
   zipCodes,
@@ -32,19 +34,30 @@ export function Sidebar({
   onClearCache,
   zipLayerVisible,
   onToggleZipLayer,
+  location,
+  onLocationChange,
 }: Props) {
   const [filter, setFilter] = useState<FilterState>('official');
   const [search, setSearch] = useState('');
   const [newZip, setNewZip] = useState('');
-  const [newState, setNewState] = useState<'MO' | 'IL'>('MO');
+  const [newState, setNewState] = useState<StateCode>(location.states[0]);
   const [newLabel, setNewLabel] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+
+  // Reset filter and add-form state when location changes
+  useEffect(() => {
+    setFilter('official');
+    setSearch('');
+    setShowAdd(false);
+    setNewState(location.states[0]);
+  }, [location.id, location.states]);
+
+  const filterTabs: FilterState[] = ['official', ...location.states];
 
   const filtered = useMemo(() => {
     return zipCodes.filter(z => {
       if (filter === 'official' && z.source !== 'official') return false;
-      if (filter === 'MO' && z.state !== 'MO') return false;
-      if (filter === 'IL' && z.state !== 'IL') return false;
+      if (filter !== 'official' && z.state !== filter) return false;
       if (search && !z.zip.includes(search) && !z.label?.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
@@ -67,8 +80,21 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
+        {/* Location switcher */}
+        <div className="location-tabs">
+          {LOCATIONS.map(loc => (
+            <button
+              key={loc.id}
+              className={`location-tab ${location.id === loc.id ? 'active' : ''}`}
+              onClick={() => onLocationChange(loc.id)}
+            >
+              {loc.label}
+            </button>
+          ))}
+        </div>
+
         <div className="header-title-row">
-          <h1>STL Commute Zone</h1>
+          <h1>Commute Zone</h1>
           <button
             className={`zip-layer-toggle ${zipLayerVisible ? 'on' : 'off'}`}
             onClick={onToggleZipLayer}
@@ -79,8 +105,11 @@ export function Sidebar({
         </div>
         <p className="subtitle">Zip code coverage map</p>
         <div className="stats">
-          <span className="stat mo">{zipCodes.filter(z => z.state === 'MO').length} MO</span>
-          <span className="stat il">{zipCodes.filter(z => z.state === 'IL').length} IL</span>
+          {location.states.map(s => (
+            <span key={s} className={`stat ${s.toLowerCase()}`}>
+              {zipCodes.filter(z => z.state === s).length} {s}
+            </span>
+          ))}
           <span className="stat neutral">{loadedCount} loaded</span>
           {loadingCount > 0 && <span className="stat loading">↻ {loadingCount}</span>}
           {errorCount > 0 && <span className="stat error">⚠ {errorCount} failed</span>}
@@ -96,10 +125,10 @@ export function Sidebar({
           onChange={e => setSearch(e.target.value)}
         />
         <div className="filter-tabs">
-          {(['official', 'MO', 'IL'] as FilterState[]).map(f => (
+          {filterTabs.map(f => (
             <button
               key={f}
-              className={`filter-tab ${filter === f ? 'active' : ''} ${f === 'MO' ? 'mo' : f === 'IL' ? 'il' : f === 'official' ? 'official' : ''}`}
+              className={`filter-tab ${filter === f ? 'active' : ''} ${f === 'official' ? 'official' : f.toLowerCase()}`}
               onClick={() => setFilter(f)}
             >
               {f === 'official' ? 'Official' : f}
@@ -134,7 +163,7 @@ export function Sidebar({
                 />
               </label>
               <div className="zip-info">
-                <span className={`zip-code ${entry.state === 'MO' ? 'mo' : 'il'}`}>
+                <span className={`zip-code ${entry.state.toLowerCase()}`}>
                   {entry.zip}
                   {entry.source === 'custom' && (
                     <span className="source-badge custom" title="Manually added">C</span>
@@ -178,11 +207,12 @@ export function Sidebar({
               />
               <select
                 value={newState}
-                onChange={e => setNewState(e.target.value as 'MO' | 'IL')}
+                onChange={e => setNewState(e.target.value as StateCode)}
                 className="add-state-select"
               >
-                <option value="MO">MO</option>
-                <option value="IL">IL</option>
+                {location.states.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
               </select>
             </div>
             <input
@@ -215,8 +245,12 @@ export function Sidebar({
       </div>
 
       <div className="legend">
-        <div className="legend-item"><span className="swatch mo" /> Missouri</div>
-        <div className="legend-item"><span className="swatch il" /> Illinois</div>
+        {location.states.map(s => (
+          <div key={s} className="legend-item">
+            <span className={`swatch ${s.toLowerCase()}`} />
+            {s === 'MO' ? 'Missouri' : s === 'IL' ? 'Illinois' : 'Arizona'}
+          </div>
+        ))}
         <div className="legend-item"><span className="swatch sel" /> Selected</div>
         <div className="legend-item"><span className="swatch dis" /> Disabled</div>
       </div>
