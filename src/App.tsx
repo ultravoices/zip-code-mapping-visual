@@ -44,6 +44,7 @@ export default function App() {
   }, [locationId]);
 
   const [selectedZip, setSelectedZip] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // ── Location switching ────────────────────────────────────────────────────
   const handleLocationChange = (id: LocationId) => {
@@ -103,7 +104,14 @@ export default function App() {
 
   return (
     <div className="app-layout">
-      <aside className="sidebar-wrapper">
+      <aside className={`sidebar-wrapper${sidebarOpen ? '' : ' collapsed'}`}>
+        <button
+          className="sidebar-toggle"
+          onClick={() => setSidebarOpen(o => !o)}
+          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+        >
+          {sidebarOpen ? '‹' : '›'}
+        </button>
         <Sidebar
           zipCodes={zipCodes}
           cache={cache}
